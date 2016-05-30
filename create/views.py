@@ -37,7 +37,7 @@ def create_instance(request, compute_id):
                          compute.password,
                          compute.type)
 
-        storages = sorted(conn.get_storages())
+        storages = sorted([s for s in conn.get_storages() if s != 'iso'])
         networks = sorted(conn.get_networks())
         instances = conn.get_instances()
         get_images = sorted(conn.get_storages_images())
