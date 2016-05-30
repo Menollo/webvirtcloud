@@ -228,7 +228,7 @@ class wvmCreate(wvmConnect):
 
         xml += """  <input type='mouse' bus='ps2'/>
                     <input type='tablet' bus='usb'/>
-                    <graphics type='%s' port='-1' autoport='yes' listen='0.0.0.0' passwd='%s'>
+                    <graphics type='%s' port='-1' autoport='yes' listen='0.0.0.0'>
                       <listen type='address' address='0.0.0.0'/>
                     </graphics>
                     <console type='pty'/>
@@ -237,5 +237,5 @@ class wvmCreate(wvmConnect):
                     </video>
                     <memballoon model='virtio'/>
                   </devices>
-                </domain>""" % (QEMU_CONSOLE_DEFAULT_TYPE, util.randomPasswd())
+                </domain>""" % QEMU_CONSOLE_DEFAULT_TYPE
         self._defineXML(xml)
