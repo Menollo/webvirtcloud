@@ -43,11 +43,6 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
 
-AUTHENTICATION_BACKENDS = (
-    #'django.contrib.auth.backends.RemoteUserBackend',
-    'accounts.backends.MyRemoteUserBackend',
-)
-
 LOGIN_URL = '/accounts/login/'
 
 ROOT_URLCONF = 'webvirtcloud.urls'
@@ -123,3 +118,8 @@ ALLOW_EMPTY_PASSWORD = True
 SHOW_ACCESS_ROOT_PASSWORD = False
 SHOW_ACCESS_SSH_KEYS = False
 SHOW_PROFILE_EDIT_PASSWORD = False
+
+try:
+    from webvirtcloud.local_settings import *
+except ImportError:
+    pass
