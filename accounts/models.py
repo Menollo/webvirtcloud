@@ -8,6 +8,7 @@ class UserInstance(models.Model):
     instance = models.ForeignKey(Instance)
     is_change = models.BooleanField(default=False)
     is_delete = models.BooleanField(default=False)
+    is_vnc = models.BooleanField(default=False)
 
     def __unicode__(self):
         return self.instance.name
@@ -23,7 +24,7 @@ class UserSSHKey(models.Model):
 
 class UserAttributes(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    can_clone_instances = models.BooleanField(default=False)
+    can_clone_instances = models.BooleanField(default=True)
     max_instances = models.IntegerField(default=1)
     max_cpus = models.IntegerField(default=1)
     max_memory = models.IntegerField(default=2048)

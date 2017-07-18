@@ -1,48 +1,42 @@
 {% extends "base.html" %}
+{% load staticfiles %}
 {% load i18n %}
 {% block title %}{% trans "Instance" %} - {{ vname }}{% endblock %}
 {% block content %}
                 {% include 'pleasewaitdialog.html' %}
                 <!-- Page Heading -->
                  <div class="row">
-                    <table>
-                        <tr>
-                            <td><h3>{{ vname }}</h3></td>
-                            <td>
-                                {% ifequal status 5 %}
-                                   <span class="label label-danger">{% trans "Off" %}</span>
-                                {% endifequal %}
-                                {% ifequal status 1 %}
-                                    <span class="label label-success">{% trans "Active" %}</span>
-                                {% endifequal %}
-                                {% ifequal status 3 %}
-                                    <span class="label label-warning">{% trans "Suspend" %}</span>
-                                {% endifequal %}
-                            </td>
-                            <td>
-                                <a href="{% url 'instance' compute.id vname %}" type="button" class="btn btn-xs btn-default"><span class="glyphicon glyphicon-refresh"></span></a>
-                            </td>
-                        </tr>
-                    </table>
-                    <table width="65%">
-                        <tr>
-                            <td>
-                                {% if cur_vcpu %}
-                                    <h4>{{ cur_vcpu }} {% trans "Vcpu" %}</h4>
-                                {% else %}
-                                    <h4>{{ vcpu }} {% trans "Vcpu" %}</h4>
-                                {% endif %} 
-                            </td>
-                            <td>
-                                <h4>{{ cur_memory }} {% trans "MB" %} {% trans "Ram" %}</h4>
-                            </td>
+                    <div>
+                        <h3>
+                            {{ vname }}{% if title %}&nbsp;({{ title }}){% endif %}
+                        </h3>
+                    </div>
+                    <div>
+                        <div>
+                            {% ifequal status 5 %}
+                               <span class="label label-danger">{% trans "Off" %}</span>
+                            {% endifequal %}
+                            {% ifequal status 1 %}
+                                <span class="label label-success">{% trans "Active" %}</span>
+                            {% endifequal %}
+                            {% ifequal status 3 %}
+                                <span class="label label-warning">{% trans "Suspend" %}</span>
+                            {% endifequal %}
+                            |
+                            {% if cur_vcpu %}
+                                {{ cur_vcpu }} {% trans "Vcpu" %}
+                            {% else %}
+                                {{ vcpu }} {% trans "Vcpu" %}
+                            {% endif %}
+                            |
+                            {{ cur_memory }} {% trans "MB" %} {% trans "Ram" %}
+                            |
                             {% for disk in disks %}
-                                <td>
-                                    <h4>{{ disk.size|filesizeformat }} {% trans "Disk" %}</h4>
-                                </td>
+                                {{ disk.size|filesizeformat }} {% trans "Disk" %} |
                             {% endfor %}
-                        </tr>
-                    </table>
+                            <a href="{% url 'instance' compute.id vname %}" type="button" class="btn btn-xs btn-default"><span class="glyphicon glyphicon-refresh"></span></a>
+                        </div>
+                    </div>
                     {% if user_quota_msg %}
                         <span class="label label-warning">{{ user_quota_msg|capfirst }} quota reached.</span>
                     {% endif %}
@@ -233,16 +227,20 @@
                                                     {% trans "Console" %}
                                                 </a>
                                             </li>
+                                            {% if SHOW_ACCESS_ROOT_PASSWORD %}
                                             <li role="presentation">
                                                 <a href="#rootpasswd" aria-controls="rootpasswd" role="tab" data-toggle="tab">
                                                     {% trans "Root Password" %}
                                                 </a>
                                             </li>
+                                            {% endif %}
+                                            {% if SHOW_ACCESS_SSH_KEYS %}
                                             <li role="presentation">
                                                 <a href="#sshkeys" aria-controls="sshkeys" role="tab" data-toggle="tab">
                                                     {% trans "SSH Keys" %}
                                                 </a>
                                             </li>
+                                            {% endif %}
                                         </ul>
                                         <!-- Tab panes -->
                                         <div class="tab-content">
@@ -255,6 +253,7 @@
                                                 {% endifequal %}
                                                 <div class="clearfix"></div>
                                             </div>
+                                            {% if SHOW_ACCESS_ROOT_PASSWORD %}
                                             <div role="tabpanel" class="tab-pane tab-pane-bordered" id="rootpasswd">
                                                 <p>{% trans "You need shut down your instance and enter a new root password." %}</p>
                                                 <form class="form-inline" method="post" role="form">{% csrf_token %}
@@ -271,6 +270,8 @@
                                                 </form>
                                                 <div class="clearfix"></div>
                                             </div>
+                                            {% endif %}
+                                            {% if SHOW_ACCESS_SSH_KEYS %}
                                             <div role="tabpanel" class="tab-pane tab-pane-bordered" id="sshkeys">
                                                 <p>{% trans "You need shut down your instance and choose your public key." %}</p>
                                                 <form class="form-inline" method="post" role="form">{% csrf_token %}
@@ -295,6 +296,7 @@
                                                 </form>
                                                 <div class="clearfix"></div>
                                             </div>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
@@ -498,11 +500,15 @@
                                                         {% trans "Autostart" %}
                                                     </a>
                                                 </li>
+                                            {% endif %}
+                                            {% if request.user.is_superuser or userinstace.is_vnc %}
                                                 <li role="presentation">
                                                     <a href="#vncsettings" aria-controls="vncsettings" role="tab" data-toggle="tab">
                                                         {% trans "VNC" %}
                                                     </a>
                                                 </li>
+                                            {% endif %}
+                                            {% if request.user.is_superuser %}
                                                 <li role="presentation">
                                                     <a href="#network" aria-controls="network" role="tab" data-toggle="tab">
                                                         {% trans "Network" %}
@@ -542,8 +548,8 @@
                                         <!-- Tab panes -->
                                         <div class="tab-content">
                                             <div role="tabpanel" class="tab-pane tab-pane-bordered active" id="media">
-                                                <form class="form-horizontal" action="" method="post" role="form">{% csrf_token %}
-                                                    {% for cd in media %}
+                                                {% for cd in media %}
+                                                    <form class="form-horizontal" action="" method="post" role="form">{% csrf_token %}
                                                         <div class="form-group">
                                                             <label class="col-sm-2 control-label">{% trans "CDROM" %} {{ forloop.counter }}</label>
                                                             {% if not cd.image %}
@@ -575,8 +581,8 @@
                                                                 </div>
                                                             {% endif %}
                                                         </div>
-                                                    {% endfor %}
-                                                </form>
+                                                    </form>
+                                                {% endfor %}
                                                 <div class="clearfix"></div>
                                             </div>
                                             {% if request.user.is_superuser %}
@@ -591,6 +597,8 @@
                                                     </form>
                                                     <div class="clearfix"></div>
                                                 </div>
+                                            {% endif %}
+                                            {% if request.user.is_superuser or userinstace.is_vnc %}
                                                 <div role="tabpanel" class="tab-pane tab-pane-bordered" id="vncsettings">
                                                     <p>{% trans "To set console's type, shutdown the instance." %}</p>
                                                     <form class="form-horizontal" method="post" role="form">{% csrf_token %}
@@ -683,6 +691,8 @@
                                                     </form>
                                                     <div class="clearfix"></div>
                                                 </div>
+                                            {% endif %}
+                                            {% if request.user.is_superuser %}
                                                 <div role="tabpanel" class="tab-pane tab-pane-bordered" id="network">
                                                     <p>{% trans "Assign network device to bridge" %}</p>
                                                     <form class="form-horizontal" action="" method="post" role="form">{% csrf_token %}
@@ -834,6 +844,12 @@
                                                             <label class="col-sm-3 control-label">{% trans "Delete original" %}</label>
                                                             <div class="col-sm-6">
                                                                 <input type="checkbox" name="xml_delete" value="true" id="xml_delete" checked>
+                                                            </div>
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label class="col-sm-3 control-label">{% trans "Offline migration" %}</label>
+                                                            <div class="col-sm-6">
+                                                                <input type="checkbox" name="offline_migrate" value="true" id="offline_migrate">
                                                             </div>
                                                         </div>
                                                         {% if computes_count != 1 %}
@@ -1002,7 +1018,7 @@
                 </div>
 {% endblock %}
 {% block script %}
-<script src="{{ STATIC_URL }}/js/ace.js" type="text/javascript" charset="utf-8"></script>
+<script src="{% static "js/ace.js" %}" type="text/javascript" charset="utf-8"></script>
 <script>
     var editor = ace.edit("editor");
     editor.getSession().setMode("ace/mode/xml");
@@ -1052,6 +1068,7 @@
             guessed_name = data['name'].split(".")[0];
             $('#clone_name').val(guessed_name);
             update_clone_disk_name(guessed_name);
+            guess_mac_address('#clone_name', 0);
         });
     }
 </script>
@@ -1138,7 +1155,7 @@
         });
     });
 </script>
-<script src="{{ STATIC_URL }}js/Chart.min.js"></script>
+<script src="{% static "js/Chart.min.js" %}"></script>
 <script>
     $('#chartgraphs').on('shown.bs.tab', function (event) {
         var cpuLineData = {
@@ -1275,13 +1292,14 @@
     });
 </script>
 <script>
+     backgroundJobRunning = false;
      window.setInterval(function get_status() {
          var status = {{ status }};
          $.getJSON('{% url 'inst_status' compute_id vname %}', function (data) {
-             if (data['status'] != status) {
+             if (data['status'] != status && !backgroundJobRunning) {
                  window.location.reload()
              }
-         })
+         });
      }, 5000);
 </script>
 <script>

@@ -3,6 +3,7 @@ import time
 import json
 import socket
 import crypt
+import re
 from string import letters, digits
 from random import choice
 from bisect import insort
@@ -55,6 +56,25 @@ def instances(request):
             info['first_user'] = None
         return info
 
+    def refresh_instance_database(comp, vm, info):
+        instances_count = Instance.objects.filter(name=vm).count()
+        if instances_count > 1:
+            for i in Instance.objects.filter(name=vm):
+                user_instances_count = UserInstance.objects.filter(instance=i).count()
+                if user_instances_count == 0:
+                    addlogmsg(request.user.username, i.name, _("Deleting due to multiple records."))
+                    i.delete()
+        
+        try:
+            check_uuid = Instance.objects.get(compute_id=comp.id, name=vm)
+            if check_uuid.uuid != info['uuid']:
+                check_uuid.save()
+            all_host_vms[comp.id, comp.name][vm]['is_template'] = check_uuid.is_template
+            all_host_vms[comp.id, comp.name][vm]['userinstances'] = get_userinstances_info(check_uuid)
+        except Instance.DoesNotExist:
+            check_uuid = Instance(compute_id=comp.id, name=vm, uuid=info['uuid'])
+            check_uuid.save()
+    
     if not request.user.is_superuser:
         user_instances = UserInstance.objects.filter(user_id=request.user.id)
         for usr_inst in user_instances:
@@ -74,15 +94,8 @@ def instances(request):
                     if conn.get_host_instances():
                         all_host_vms[comp.id, comp.name] = conn.get_host_instances()
                         for vm, info in conn.get_host_instances().items():
-                            try:
-                                check_uuid = Instance.objects.get(compute_id=comp.id, name=vm)
-                                if check_uuid.uuid != info['uuid']:
-                                    check_uuid.save()
-                                all_host_vms[comp.id, comp.name][vm]['is_template'] = check_uuid.is_template
-                                all_host_vms[comp.id, comp.name][vm]['userinstances'] = get_userinstances_info(check_uuid)
-                            except Instance.DoesNotExist:
-                                check_uuid = Instance(compute_id=comp.id, name=vm, uuid=info['uuid'])
-                                check_uuid.save()
+                            refresh_instance_database(comp, vm, info)
+
                     conn.close()
                 except libvirtError as lib_err:
                     error_messages.append(lib_err)
@@ -242,7 +255,8 @@ def instance(request, compute_id, vname):
                 cpu += int(conn.get_vcpu())
                 memory += int(conn.get_memory())
                 for disk in conn.get_disk_device():
-                    disk_size += int(disk['size'])>>30
+                    if disk['size']:
+                        disk_size += int(disk['size'])>>30
         
         ua = request.user.userattributes
         msg = ""
@@ -341,10 +355,12 @@ def instance(request, compute_id, vname):
                 addlogmsg(request.user.username, instance.name, msg)
                 return HttpResponseRedirect(request.get_full_path() + '#powerforce')
 
-            if 'delete' in request.POST:
+            if 'delete' in request.POST and (request.user.is_superuser or userinstace.is_delete):
                 if conn.get_status() == 1:
                     conn.force_shutdown()
                 if request.POST.get('delete_disk', ''):
+                    for snap in snapshots:
+                        conn.snapshot_delete(snap['name'])
                     conn.delete_disk()
                 conn.delete()
 
@@ -407,7 +423,7 @@ def instance(request, compute_id, vname):
                     msg = _("Please shutdow down your instance and then try again")
                     error_messages.append(msg)
 
-            if 'resize' in request.POST:
+            if 'resize' in request.POST and (request.user.is_superuser or userinstace.is_change):
                 new_vcpu = request.POST.get('vcpu', '')
                 new_cur_vcpu = request.POST.get('cur_vcpu', '')
                 new_memory = request.POST.get('memory', '')
@@ -512,6 +528,7 @@ def instance(request, compute_id, vname):
                         addlogmsg(request.user.username, instance.name, msg)
                         return HttpResponseRedirect(request.get_full_path() + '#xmledit')
 
+            if request.user.is_superuser or userinstace.is_vnc:
                 if 'set_console_passwd' in request.POST:
                     if request.POST.get('auto_pass', ''):
                         passwd = ''.join([choice(letters + digits) for i in xrange(12)])
@@ -550,22 +567,31 @@ def instance(request, compute_id, vname):
                     addlogmsg(request.user.username, instance.name, msg)
                     return HttpResponseRedirect(request.get_full_path() + '#vncsettings')
 
+            if request.user.is_superuser:
                 if 'migrate' in request.POST:
                     compute_id = request.POST.get('compute_id', '')
                     live = request.POST.get('live_migrate', False)
                     unsafe = request.POST.get('unsafe_migrate', False)
                     xml_del = request.POST.get('xml_delete', False)
+                    offline = request.POST.get('offline_migrate', False)
                     new_compute = Compute.objects.get(id=compute_id)
                     conn_migrate = wvmInstances(new_compute.hostname,
                                                 new_compute.login,
                                                 new_compute.password,
                                                 new_compute.type)
-                    conn_migrate.moveto(conn, vname, live, unsafe, xml_del)
-                    conn_migrate.define_move(vname)
+                    conn_migrate.moveto(conn, vname, live, unsafe, xml_del, offline)
                     instance.compute = new_compute
                     instance.save()
                     conn_migrate.close()
-                    msg = _("Migrate")
+                    if autostart:
+                        conn_new = wvmInstance(new_compute.hostname,
+                                               new_compute.login,
+                                               new_compute.password,
+                                               new_compute.type,
+                                               vname)
+                        conn_new.set_autostart(1)
+                        conn_new.close()
+                    msg = _("Migrate to %s" % new_compute.hostname)
                     addlogmsg(request.user.username, instance.name, msg)
                     return HttpResponseRedirect(reverse('instance', args=[compute_id, vname]))
 
@@ -604,16 +630,22 @@ def instance(request, compute_id, vname):
                     quota_msg = check_user_quota(1, vcpu, memory, disk_sum)
                     check_instance = Instance.objects.filter(name=clone_data['name'])
                     
-                    if not request.user.is_superuser and quota_msg:    
+                    for post in request.POST:
+                        clone_data[post] = request.POST.get(post, '').strip()
+                    
+                    if not request.user.is_superuser and quota_msg:
                         msg = _("User %s quota reached, cannot create '%s'!" % (quota_msg, clone_data['name']))
                         error_messages.append(msg)
                     elif check_instance:
                         msg = _("Instance '%s' already exists!" % clone_data['name'])
                         error_messages.append(msg)
+                    elif not re.match(r'^[a-zA-Z0-9-]+$', clone_data['name']):
+                        msg = _("Instance name '%s' contains invalid characters!" % clone_data['name'])
+                        error_messages.append(msg)
+                    elif not re.match(r'^([0-9A-F]{2})(\:?[0-9A-F]{2}){5}$', clone_data['clone-net-mac-0'], re.IGNORECASE):
+                        msg = _("Instance mac '%s' invalid format!" % clone_data['clone-net-mac-0'])
+                        error_messages.append(msg)
                     else:
-                        for post in request.POST:
-                            clone_data[post] = request.POST.get(post, '')
-
                         new_uuid = conn.clone_instance(clone_data)
                         new_instance = Instance(compute_id=compute_id, name=clone_data['name'], uuid=new_uuid)
                         new_instance.save()
@@ -778,7 +810,7 @@ def guess_mac_address(request, vname):
                 if name_found and "hardware ethernet" in line:
                     data['mac'] = line.split(' ')[-1].strip().strip(';')
                     break
-    return HttpResponse(json.dumps(data));
+    return HttpResponse(json.dumps(data))
 
 @login_required
 def guess_clone_name(request):
@@ -790,10 +822,11 @@ def guess_clone_name(request):
             for line in f:
                 line = line.strip()
                 if "host %s" % prefix in line:
-                    hostname = line.split(' ')[1]
+                    fqdn = line.split(' ')[1]
+                    hostname = fqdn.split('.')[0]
                     if hostname.startswith(prefix) and hostname not in instance_names:
                         return HttpResponse(json.dumps({'name': hostname}))
-    return HttpResponse(json.dumps({}));
+    return HttpResponse(json.dumps({}))
 
 @login_required
 def check_instance(request, vname):
@@ -801,4 +834,20 @@ def check_instance(request, vname):
     data = { 'vname': vname, 'exists': False }
     if check_instance:
         data['exists'] = True
-    return HttpResponse(json.dumps(data));
+    return HttpResponse(json.dumps(data))
+
+def sshkeys(request, vname):
+    """
+    :param request:
+    :param vm:
+    :return:
+    """
+
+    instance_keys = []
+    userinstances = UserInstance.objects.filter(instance__name=vname)
+    
+    for ui in userinstances:
+        keys = UserSSHKey.objects.filter(user=ui.user)
+        for k in keys:
+            instance_keys.append(k.keypublic)
+    return HttpResponse(json.dumps(instance_keys))

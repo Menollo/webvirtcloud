@@ -43,6 +43,11 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
 
+AUTHENTICATION_BACKENDS = (
+    #'django.contrib.auth.backends.RemoteUserBackend',
+    'accounts.backends.MyRemoteUserBackend',
+)
+
 LOGIN_URL = '/accounts/login/'
 
 ROOT_URLCONF = 'webvirtcloud.urls'
@@ -72,9 +77,13 @@ STATICFILES_DIRS = (
     os.path.join(BASE_DIR, "static"),
 )
 
-TEMPLATE_DIRS = (
-    os.path.join(BASE_DIR,  'templates'),
-)
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [ os.path.join(BASE_DIR, 'templates'), ],
+        'APP_DIRS': True,
+    }
+]
 
 ## WebVirtCloud settings
 
@@ -110,3 +119,7 @@ ALLOW_INSTANCE_MULTIPLE_OWNER = True
 CLONE_INSTANCE_DEFAULT_PREFIX = 'ourea'
 LOGS_PER_PAGE = 100
 QUOTA_DEBUG = True
+ALLOW_EMPTY_PASSWORD = True
+SHOW_ACCESS_ROOT_PASSWORD = False
+SHOW_ACCESS_SSH_KEYS = False
+SHOW_PROFILE_EDIT_PASSWORD = False

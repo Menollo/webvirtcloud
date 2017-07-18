@@ -70,21 +70,12 @@ def accounts(request):
     :param request:
     :return:
     """
-
-    def create_missing_userattributes(users):
-        for user in users:
-            try:
-                userattributes = user.userattributes
-            except UserAttributes.DoesNotExist:
-                userattributes = UserAttributes(user=user)
-                userattributes.save()
-
     if not request.user.is_superuser:
         return HttpResponseRedirect(reverse('index'))
 
     error_messages = []
     users = User.objects.all().order_by('username')
-    create_missing_userattributes(users)
+    allow_empty_password = settings.ALLOW_EMPTY_PASSWORD
 
     if request.method == 'POST':
         if 'create' in request.POST:
@@ -155,9 +146,6 @@ def account(request, user_id):
     user_insts = UserInstance.objects.filter(user_id=user_id)
     instances = Instance.objects.all().order_by('name')
 
-    if user.username == request.user.username:
-        return HttpResponseRedirect(reverse('profile'))
-
     if request.method == 'POST':
         if 'delete' in request.POST:
             user_inst = request.POST.get('user_inst', '')
@@ -166,11 +154,13 @@ def account(request, user_id):
             return HttpResponseRedirect(request.get_full_path())
         if 'permission' in request.POST:
             user_inst = request.POST.get('user_inst', '')
+            inst_vnc = request.POST.get('inst_vnc', '')
             inst_change = request.POST.get('inst_change', '')
             inst_delete = request.POST.get('inst_delete', '')
             edit_user_inst = UserInstance.objects.get(id=user_inst)
             edit_user_inst.is_change = bool(inst_change)
             edit_user_inst.is_delete = bool(inst_delete)
+            edit_user_inst.is_vnc = bool(inst_vnc)
             edit_user_inst.save()
             return HttpResponseRedirect(request.get_full_path())
         if 'add' in request.POST:
