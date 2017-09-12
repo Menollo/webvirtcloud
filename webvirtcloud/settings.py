@@ -91,6 +91,9 @@ WS_HOST = '0.0.0.0'
 # Websock public port
 WS_PUBLIC_HOST = None
 
+# Websock path if not root
+WS_PATH = ''
+
 # Websock SSL connection
 WS_CERT = None
 

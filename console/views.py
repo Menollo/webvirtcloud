@@ -7,6 +7,7 @@ from instances.models import Instance
 from vrtManager.instance import wvmInstance
 from webvirtcloud.settings import WS_PORT
 from webvirtcloud.settings import WS_PUBLIC_HOST
+from webvirtcloud.settings import WS_PATH
 from libvirt import libvirtError
 
 
@@ -40,6 +41,7 @@ def console(request):
 
     ws_port = console_websocket_port if console_websocket_port else WS_PORT
     ws_host = WS_PUBLIC_HOST if WS_PUBLIC_HOST else request.get_host()
+    ws_path = WS_PATH
 
     if ':' in ws_host:
         ws_host = re.sub(':[0-9]+', '', ws_host)
